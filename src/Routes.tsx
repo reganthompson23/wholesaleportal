@@ -7,6 +7,7 @@ import CustomerLayout from './layouts/CustomerLayout'
 import AdminLayout from './layouts/AdminLayout'
 import Orders from './pages/customer/Orders'
 import AdminOrders from './pages/admin/orders/OrdersList'
+import CustomersList from './pages/admin/customers/CustomersList'
 
 export default function AppRoutes() {
   const { user } = useAuth()
@@ -27,6 +28,7 @@ export default function AppRoutes() {
         <Route element={<AdminLayout />}>
           <Route path="/admin/products" element={<AdminProducts />} />
           <Route path="/admin/orders" element={<AdminOrders />} />
+          <Route path="/admin/customers" element={<CustomersList />} />
           <Route path="*" element={<Navigate to="/admin/products" replace />} />
         </Route>
       </Routes>

@@ -35,6 +35,16 @@ export default function AdminLayout() {
                 >
                   Orders
                 </Link>
+                <Link
+                  to="/admin/customers"
+                  className={`px-3 py-2 rounded-md text-sm font-medium ${
+                    location.pathname === '/admin/customers'
+                      ? 'bg-gray-900 text-white'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  Customers
+                </Link>
               </div>
             </div>
             <div className="flex items-center">
