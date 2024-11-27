@@ -68,7 +68,8 @@ export default function Checkout({ cart, products, onClose, onCheckoutComplete }
           order_id: order.id,
           product_id: productId,
           quantity: quantity,
-          unit_price: product.unit_price
+          unit_price: product.unit_price,
+          created_at: new Date().toISOString()
         }
       })
 
