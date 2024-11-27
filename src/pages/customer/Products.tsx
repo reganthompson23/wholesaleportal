@@ -1,35 +1,50 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ShoppingCart, X, Trash2 } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
 import Checkout from './Checkout'
 
-// Temporary mock data until we connect to Supabase
-const mockProducts = [
-  {
-    id: '1',
-    title: 'Product 1',
-    sku: 'SKU001',
-    unit_price: 29.99,
-    description: 'Product 1 description',
-    stock_status: 'in_stock',
-    stock_quantity: 100,
-    is_available: true,
-  },
-  {
-    id: '2',
-    title: 'Product 2',
-    sku: 'SKU002',
-    unit_price: 39.99,
-    description: 'Product 2 description',
-    stock_status: 'low_stock',
-    stock_quantity: 50,
-    is_available: true,
-  },
-]
+interface Product {
+  id: string
+  title: string
+  sku: string
+  unit_price: number
+  description: string
+  stock_status: string
+  stock_quantity: number
+  is_available: boolean
+}
 
 export default function Products() {
+  const [products, setProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [cart, setCart] = useState<Record<string, number>>({})
   const [isCartOpen, setIsCartOpen] = useState(false)
   const [checkoutMode, setCheckoutMode] = useState(false)
+
+  useEffect(() => {
+    fetchProducts()
+  }, [])
+
+  async function fetchProducts() {
+    try {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('is_available', true)
+        .order('title')
+
+      if (error) throw error
+
+      setProducts(data || [])
+    } catch (error) {
+      console.error('Error fetching products:', error)
+      setError('Failed to load products')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const updateQuantity = (productId: string, quantity: number) => {
     setCart(prev => ({
@@ -47,7 +62,7 @@ export default function Products() {
   }
 
   const cartTotal = Object.entries(cart).reduce((total, [productId, quantity]) => {
-    const product = mockProducts.find(p => p.id === productId)
+    const product = products.find(p => p.id === productId)
     return total + (product?.unit_price || 0) * quantity
   }, 0)
 
@@ -57,7 +72,10 @@ export default function Products() {
     setIsCartOpen(false)
   }
 
-  const availableProducts = mockProducts.filter(product => product.is_available)
+  if (loading) return <div className="text-center py-4">Loading products...</div>
+  if (error) return <div className="text-red-600 text-center py-4">{error}</div>
+
+  const availableProducts = products.filter(product => product.is_available)
 
   return (
     <div className="space-y-4">
@@ -173,7 +191,7 @@ export default function Products() {
               {checkoutMode ? (
                 <Checkout
                   cart={cart}
-                  products={mockProducts}
+                  products={products}
                   onClose={() => setCheckoutMode(false)}
                   onCheckoutComplete={handleCheckoutComplete}
                 />
@@ -182,7 +200,7 @@ export default function Products() {
                   {/* Cart items */}
                   <div className="flex-1 py-6 px-4 sm:px-6 overflow-y-auto">
                     {Object.entries(cart).map(([productId, quantity]) => {
-                      const product = mockProducts.find(p => p.id === productId)
+                      const product = products.find(p => p.id === productId)
                       if (!product || quantity === 0) return null
                       
                       return (

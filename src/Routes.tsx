@@ -11,6 +11,7 @@ import CustomersList from './pages/admin/customers/CustomersList'
 
 export default function AppRoutes() {
   const { user } = useAuth()
+  const isAdmin = user?.email === 'regan@syndicatestore.com.au'
 
   if (!user) {
     return (
@@ -22,7 +23,7 @@ export default function AppRoutes() {
   }
 
   // Admin routes
-  if (user.isAdmin) {
+  if (isAdmin) {
     return (
       <Routes>
         <Route element={<AdminLayout />}>

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CheckCircle, Loader2, X } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
 
 interface CheckoutProps {
   cart: Record<string, number>
@@ -29,24 +30,57 @@ export default function Checkout({ cart, products, onClose, onCheckoutComplete }
     return total + (product?.unit_price || 0) * quantity
   }, 0)
 
-  const handleSubmitOrder = () => {
+  const handleSubmitOrder = async () => {
     try {
       setLoading(true)
       
-      // For now, just simulate order submission
-      console.log('Order submitted:', {
-        shippingDetails,
-        cart,
-        total: cartTotal
+      // Debug: Check if user is authenticated
+      const { data: { user } } = await supabase.auth.getUser()
+      console.log('Current user:', user)
+      if (!user) {
+        throw new Error('Not authenticated')
+      }
+      
+      // 1. Create the order
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .insert([{
+          customer_id: (await supabase.auth.getUser()).data.user?.id,
+          status: 'new',
+          payment_status: 'unpaid',
+          total: cartTotal,
+          shipping_address: `${shippingDetails.businessName}\n${shippingDetails.contactName}\n${shippingDetails.email}\n${shippingDetails.phone}\n${shippingDetails.address}\n${shippingDetails.state} ${shippingDetails.postcode}\n${shippingDetails.country}`,
+          internal_notes: shippingDetails.notes,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }])
+        .select()
+        .single()
+
+      if (orderError) throw orderError
+
+      // 2. Create order items
+      const orderItems = Object.entries(cart).map(([productId, quantity]) => {
+        const product = products.find(p => p.id === productId)
+        if (!product) throw new Error(`Product ${productId} not found`)
+
+        return {
+          order_id: order.id,
+          product_id: productId,
+          quantity: quantity,
+          unit_price: product.unit_price
+        }
       })
 
-      // Clear the cart
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .insert(orderItems)
+
+      if (itemsError) throw itemsError
+
+      // Clear the cart and navigate
       onCheckoutComplete()
-
-      // Close the checkout drawer
       onClose()
-
-      // Navigate to orders page
       navigate('/orders')
 
     } catch (error) {

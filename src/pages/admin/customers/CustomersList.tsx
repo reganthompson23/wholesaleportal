@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2, Search } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import CustomerFormModal from './CustomerFormModal'
+import { useAuth } from '../../../contexts/AuthContext'
 
 interface Customer {
   id: string
@@ -17,13 +18,26 @@ interface Customer {
   updated_at: string
 }
 
+function generateTempPassword() {
+  return Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
+}
+
 export default function CustomersList() {
+  const { user } = useAuth()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | undefined>()
   const [searchTerm, setSearchTerm] = useState('')
+
+  useEffect(() => {
+    console.log('Current user:', user)
+    console.log('User email:', user?.email)
+    supabase.auth.getSession().then(session => {
+      console.log('Session:', session)
+    })
+  }, [user])
 
   useEffect(() => {
     fetchCustomers()
@@ -60,8 +74,25 @@ export default function CustomersList() {
 
   const handleSaveCustomer = async (customerData: Omit<Customer, 'id' | 'created_at' | 'updated_at'>) => {
     try {
-      if (editingCustomer) {
-        // Update existing customer
+      if (!editingCustomer) {
+        // Create new customer through our backend API
+        const response = await fetch('http://localhost:3001/api/customers', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(customerData),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message);
+        }
+
+        const data = await response.json();
+        setCustomers(prev => [...prev, data]);
+      } else {
+        // Keep existing update logic for editing customers
         const { error } = await supabase
           .from('customers')
           .update({
@@ -75,21 +106,6 @@ export default function CustomersList() {
         setCustomers(prev =>
           prev.map(c => (c.id === editingCustomer.id ? { ...c, ...customerData } : c))
         )
-      } else {
-        // Create new customer
-        const { data, error } = await supabase
-          .from('customers')
-          .insert([{
-            ...customerData,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }])
-          .select()
-          .single()
-
-        if (error) throw error
-
-        setCustomers(prev => [...prev, data])
       }
       handleCloseModal()
     } catch (error) {
