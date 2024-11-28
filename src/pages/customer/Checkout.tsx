@@ -2,16 +2,17 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CheckCircle, Loader2, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useCart } from '../../contexts/CartContext'
 
 interface CheckoutProps {
-  cart: Record<string, number>
   products: any[]
   onClose: () => void
   onCheckoutComplete: () => void
 }
 
-export default function Checkout({ cart, products, onClose, onCheckoutComplete }: CheckoutProps) {
+export default function Checkout({ products, onClose, onCheckoutComplete }: CheckoutProps) {
   const navigate = useNavigate()
+  const { cart, clearCart } = useCart()
   const [loading, setLoading] = useState(false)
   const [shippingDetails, setShippingDetails] = useState({
     businessName: '',
@@ -79,7 +80,8 @@ export default function Checkout({ cart, products, onClose, onCheckoutComplete }
 
       if (itemsError) throw itemsError
 
-      // Clear the cart and navigate
+      // Clear the cart using context's clearCart
+      clearCart()
       onCheckoutComplete()
       onClose()
       navigate('/orders')

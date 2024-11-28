@@ -31,12 +31,21 @@ export default function ProductsList() {
       setLoading(true)
       const { data, error } = await supabase
         .from('products')
-        .select('*')
+        .select(`
+          *,
+          images:product_images(*)
+        `)
         .order('title')
 
       if (error) throw error
 
-      setProducts(data || [])
+      // Transform the data to match our Product interface
+      const productsWithImages = data?.map(product => ({
+        ...product,
+        images: product.images || []
+      })) || []
+
+      setProducts(productsWithImages)
     } catch (error) {
       console.error('Error fetching products:', error)
       setError('Failed to fetch products')
@@ -55,9 +64,14 @@ export default function ProductsList() {
     setShowModal(false)
   }
 
-  const handleSaveProduct = async (productData: Omit<Product, 'id'>) => {
+  const handleSaveProduct = async (
+    productData: Omit<Product, 'id'>, 
+    images: File[],
+    imageOrder: ProductImage[]
+  ) => {
     try {
       console.log('Attempting to save product:', productData)
+      let productId: string;
       
       if (editingProduct) {
         // Update existing product
@@ -69,13 +83,21 @@ export default function ProductsList() {
           })
           .eq('id', editingProduct.id)
 
-        if (error) {
-          console.error('Supabase update error:', error)
-          throw error
+        if (error) throw error
+        productId = editingProduct.id
+
+        // Update image order in database
+        for (let i = 0; i < imageOrder.length; i++) {
+          const { error: updateError } = await supabase
+            .from('product_images')
+            .update({ display_order: i })
+            .eq('id', imageOrder[i].id)
+          
+          if (updateError) throw updateError
         }
 
         setProducts(prev =>
-          prev.map(p => (p.id === editingProduct.id ? { ...p, ...productData } : p))
+          prev.map(p => (p.id === editingProduct.id ? { ...p, ...productData, images: imageOrder } : p))
         )
       } else {
         // Create new product
@@ -89,14 +111,43 @@ export default function ProductsList() {
           .select()
           .single()
 
-        if (error) {
-          console.error('Supabase insert error:', error)
-          throw error
-        }
-
-        console.log('Product saved successfully:', data)
+        if (error) throw error
+        if (!data) throw new Error('No data returned from insert')
+        
+        productId = data.id
         setProducts(prev => [...prev, data])
       }
+
+      // Handle new image uploads if there are any
+      if (images.length > 0) {
+        for (let i = 0; i < images.length; i++) {
+          const file = images[i];
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${productId}/${Date.now()}.${fileExt}`;
+
+          const { error: uploadError, data } = await supabase.storage
+            .from('product-images')
+            .upload(fileName, file);
+
+          if (uploadError) throw uploadError;
+
+          const { data: { publicUrl } } = supabase.storage
+            .from('product-images')
+            .getPublicUrl(fileName);
+
+          const { error: dbError } = await supabase
+            .from('product_images')
+            .insert([{
+              product_id: productId,
+              image_url: publicUrl,
+              display_order: imageOrder.length + i,
+              created_at: new Date().toISOString()
+            }]);
+
+          if (dbError) throw dbError;
+        }
+      }
+
       handleCloseModal()
     } catch (error) {
       console.error('Error saving product:', error)

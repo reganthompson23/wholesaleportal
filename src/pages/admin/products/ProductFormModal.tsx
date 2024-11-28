@@ -1,5 +1,12 @@
 import { useState, useEffect } from 'react'
-import { X } from 'lucide-react'
+import { X, ArrowUp, ArrowDown } from 'lucide-react'
+
+interface ProductImage {
+  id: string
+  product_id: string
+  image_url: string
+  display_order: number
+}
 
 interface Product {
   id?: string
@@ -9,12 +16,17 @@ interface Product {
   description: string
   stock_quantity: number
   is_available: boolean
+  images?: ProductImage[]
 }
 
 interface Props {
   product?: Product
   onClose: () => void
-  onSave: (productData: Omit<Product, 'id'>) => Promise<void>
+  onSave: (
+    productData: Omit<Product, 'id'>, 
+    images: File[], 
+    imageOrder: ProductImage[]
+  ) => Promise<void>
 }
 
 export default function ProductFormModal({ product, onClose, onSave }: Props) {
@@ -27,6 +39,8 @@ export default function ProductFormModal({ product, onClose, onSave }: Props) {
     is_available: true,
   })
   const [loading, setLoading] = useState(false)
+  const [images, setImages] = useState<File[]>([])
+  const [imageOrder, setImageOrder] = useState<ProductImage[]>(product?.images || [])
 
   useEffect(() => {
     if (product) {
@@ -38,6 +52,7 @@ export default function ProductFormModal({ product, onClose, onSave }: Props) {
         stock_quantity: product.stock_quantity,
         is_available: product.is_available,
       })
+      setImageOrder(product.images || [])
     }
   }, [product])
 
@@ -45,7 +60,7 @@ export default function ProductFormModal({ product, onClose, onSave }: Props) {
     e.preventDefault()
     try {
       setLoading(true)
-      await onSave(formData)
+      await onSave(formData, images, imageOrder)
       onClose()
     } catch (error) {
       console.error('Error saving product:', error)
@@ -55,9 +70,31 @@ export default function ProductFormModal({ product, onClose, onSave }: Props) {
     }
   }
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setImages(Array.from(e.target.files))
+    }
+  }
+
+  const moveImageUp = (index: number, e: React.MouseEvent) => {
+    e.preventDefault()
+    if (index === 0) return
+    const newOrder = [...imageOrder]
+    ;[newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]]
+    setImageOrder(newOrder)
+  }
+
+  const moveImageDown = (index: number, e: React.MouseEvent) => {
+    e.preventDefault()
+    if (index === imageOrder.length - 1) return
+    const newOrder = [...imageOrder]
+    ;[newOrder[index + 1], newOrder[index]] = [newOrder[index], newOrder[index + 1]]
+    setImageOrder(newOrder)
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg max-w-md w-full">
+      <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-center p-4 border-b">
           <h2 className="text-lg font-medium">
             {product ? 'Edit Product' : 'Add New Product'}
@@ -67,7 +104,7 @@ export default function ProductFormModal({ product, onClose, onSave }: Props) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto flex-1">
           <div>
             <label className="block text-sm font-medium text-gray-700">Title</label>
             <input
@@ -131,6 +168,39 @@ export default function ProductFormModal({ product, onClose, onSave }: Props) {
               className="rounded border-gray-300"
             />
             <label className="text-sm font-medium text-gray-700">Available for Purchase</label>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Upload Images</label>
+            <input
+              type="file"
+              multiple
+              accept="image/*"
+              onChange={handleImageChange}
+              className="mt-1 block w-full"
+            />
+          </div>
+
+          <div className="space-y-2">
+            {imageOrder.map((image, index) => (
+              <div key={image.id} className="flex items-center space-x-2">
+                <img src={image.image_url} alt="" className="w-16 h-16 object-cover" />
+                <button 
+                  type="button"
+                  onClick={(e) => moveImageUp(index, e)} 
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <ArrowUp className="h-5 w-5" />
+                </button>
+                <button 
+                  type="button"
+                  onClick={(e) => moveImageDown(index, e)} 
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <ArrowDown className="h-5 w-5" />
+                </button>
+              </div>
+            ))}
           </div>
 
           <div className="flex justify-end space-x-2 pt-4">

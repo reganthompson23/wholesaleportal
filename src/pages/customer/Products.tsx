@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { ShoppingCart, X, Trash2 } from 'lucide-react'
+import { ShoppingCart, X, Trash2, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import Checkout from './Checkout'
+import { useCart } from '../../contexts/CartContext'
 
 interface Product {
   id: string
@@ -15,12 +16,12 @@ interface Product {
 }
 
 export default function Products() {
+  const { cart, isCartOpen, setIsCartOpen, updateQuantity, removeFromCart, clearCart } = useCart()
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [cart, setCart] = useState<Record<string, number>>({})
-  const [isCartOpen, setIsCartOpen] = useState(false)
   const [checkoutMode, setCheckoutMode] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
 
   useEffect(() => {
     fetchProducts()
@@ -46,31 +47,20 @@ export default function Products() {
     }
   }
 
-  const updateQuantity = (productId: string, quantity: number) => {
-    setCart(prev => ({
-      ...prev,
-      [productId]: Math.max(0, quantity)
-    }))
-  }
-
-  const removeFromCart = (productId: string) => {
-    setCart(prev => {
-      const newCart = { ...prev }
-      delete newCart[productId]
-      return newCart
-    })
-  }
-
   const cartTotal = Object.entries(cart).reduce((total, [productId, quantity]) => {
     const product = products.find(p => p.id === productId)
     return total + (product?.unit_price || 0) * quantity
   }, 0)
 
   const handleCheckoutComplete = () => {
-    setCart({})
+    clearCart()
     setCheckoutMode(false)
     setIsCartOpen(false)
   }
+
+  const filteredProducts = products.filter(product => 
+    product.title.toLowerCase().includes(searchTerm.toLowerCase())
+  )
 
   if (loading) return <div className="text-center py-4">Loading products...</div>
   if (error) return <div className="text-red-600 text-center py-4">{error}</div>
@@ -90,6 +80,19 @@ export default function Products() {
         </button>
       </div>
 
+      <div className="relative">
+        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <Search className="h-5 w-5 text-gray-400" />
+        </div>
+        <input
+          type="text"
+          placeholder="Search products..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+        />
+      </div>
+
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -102,7 +105,7 @@ export default function Products() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {availableProducts.map(product => (
+            {filteredProducts.map(product => (
               <tr key={product.id}>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">{product.title}</div>
@@ -190,7 +193,6 @@ export default function Products() {
 
               {checkoutMode ? (
                 <Checkout
-                  cart={cart}
                   products={products}
                   onClose={() => setCheckoutMode(false)}
                   onCheckoutComplete={handleCheckoutComplete}
