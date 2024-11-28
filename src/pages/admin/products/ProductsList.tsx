@@ -41,13 +41,13 @@ export default function ProductsList() {
 
       if (error) throw error
 
-      // Transform the data to match our Product interface
-      const productsWithImages = data?.map(product => ({
+      // Sort the images by display_order
+      const productsWithSortedImages = data?.map(product => ({
         ...product,
-        images: product.images || []
+        images: (product.images || []).sort((a, b) => a.display_order - b.display_order)
       })) || []
 
-      setProducts(productsWithImages)
+      setProducts(productsWithSortedImages)
     } catch (error) {
       console.error('Error fetching products:', error)
       setError('Failed to fetch products')
@@ -238,7 +238,6 @@ export default function ProductsList() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">{product.title}</div>
-                  <div className="text-sm text-gray-500">{product.description}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {product.sku}
