@@ -18,8 +18,7 @@ export default function ImageGalleryModal({ images, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-25 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="relative w-full max-w-4xl mx-4">
-        {/* Close button aligned with right nav button, smaller grey icon */}
+      <div className="relative w-full max-w-[80vh] aspect-square mx-4">
         <button
           onClick={onClose}
           className="absolute top-4 right-2 bg-white bg-opacity-75 hover:bg-opacity-100 p-2.5 rounded-full z-10"
@@ -27,11 +26,11 @@ export default function ImageGalleryModal({ images, onClose }: Props) {
           <X className="h-4 w-4 text-gray-600" />
         </button>
 
-        <div className="relative aspect-video flex items-center justify-center">
+        <div className="relative w-full h-full flex items-center justify-center">
           <img
             src={images[currentImageIndex].image_url}
             alt=""
-            className="max-h-[80vh] max-w-full object-contain"
+            className="max-w-full max-h-full object-contain"
           />
           
           {images.length > 1 && (
@@ -51,12 +50,6 @@ export default function ImageGalleryModal({ images, onClose }: Props) {
             </>
           )}
         </div>
-
-        {images.length > 1 && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white bg-opacity-75 px-3 py-1 rounded-full text-sm text-gray-600">
-            {currentImageIndex + 1} / {images.length}
-          </div>
-        )}
       </div>
     </div>
   )

@@ -72,34 +72,79 @@ export default function ProductsList() {
     imageOrder: ProductImage[]
   ) => {
     try {
-      console.log('Attempting to save product:', productData)
-      let productId: string;
-      
       if (editingProduct) {
-        // Update existing product
-        const { error } = await supabase
+        // Update product details
+        const { error: productError } = await supabase
           .from('products')
-          .update({
-            ...productData,
-            updated_at: new Date().toISOString()
-          })
+          .update(productData)
           .eq('id', editingProduct.id)
 
-        if (error) throw error
-        productId = editingProduct.id
+        if (productError) throw productError
 
-        // Update image order in database
-        for (let i = 0; i < imageOrder.length; i++) {
-          const { error: updateError } = await supabase
+        // Update image orders - simplified version
+        for (const [index, image] of imageOrder.entries()) {
+          const { error } = await supabase
             .from('product_images')
-            .update({ display_order: i })
-            .eq('id', imageOrder[i].id)
+            .update({ display_order: index })
+            .eq('id', image.id)
           
-          if (updateError) throw updateError
+          if (error) throw error
         }
 
+        // Handle new image uploads
+        if (images.length > 0) {
+          const startOrder = imageOrder.length
+          for (let i = 0; i < images.length; i++) {
+            const file = images[i]
+            const fileExt = file.name.split('.').pop()
+            const fileName = `${editingProduct.id}/${Date.now()}-${i}.${fileExt}`
+
+            const { error: uploadError } = await supabase.storage
+              .from('product-images')
+              .upload(fileName, file)
+
+            if (uploadError) throw uploadError
+
+            const { data: { publicUrl } } = supabase.storage
+              .from('product-images')
+              .getPublicUrl(fileName)
+
+            const { error: dbError } = await supabase
+              .from('product_images')
+              .insert([{
+                product_id: editingProduct.id,
+                image_url: publicUrl,
+                display_order: startOrder + i,
+                created_at: new Date().toISOString()
+              }])
+
+            if (dbError) throw dbError
+          }
+        }
+
+        // Fetch updated product to ensure we have the latest data
+        const { data: updatedProduct, error: fetchError } = await supabase
+          .from('products')
+          .select(`
+            *,
+            images:product_images(*)
+          `)
+          .eq('id', editingProduct.id)
+          .single()
+
+        if (fetchError) throw fetchError
+
+        // Update local state with sorted images
         setProducts(prev =>
-          prev.map(p => (p.id === editingProduct.id ? { ...p, ...productData, images: imageOrder } : p))
+          prev.map(p => {
+            if (p.id === editingProduct.id) {
+              return {
+                ...updatedProduct,
+                images: (updatedProduct.images || []).sort((a, b) => a.display_order - b.display_order)
+              }
+            }
+            return p
+          })
         )
       } else {
         // Create new product
@@ -116,7 +161,6 @@ export default function ProductsList() {
         if (error) throw error
         if (!data) throw new Error('No data returned from insert')
         
-        productId = data.id
         setProducts(prev => [...prev, data])
       }
 
@@ -125,7 +169,7 @@ export default function ProductsList() {
         for (let i = 0; i < images.length; i++) {
           const file = images[i];
           const fileExt = file.name.split('.').pop();
-          const fileName = `${productId}/${Date.now()}.${fileExt}`;
+          const fileName = `${editingProduct?.id}/${Date.now()}.${fileExt}`;
 
           const { error: uploadError, data } = await supabase.storage
             .from('product-images')
@@ -140,7 +184,7 @@ export default function ProductsList() {
           const { error: dbError } = await supabase
             .from('product_images')
             .insert([{
-              product_id: productId,
+              product_id: editingProduct?.id,
               image_url: publicUrl,
               display_order: imageOrder.length + i,
               created_at: new Date().toISOString()
