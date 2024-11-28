@@ -3,6 +3,7 @@ import { ShoppingCart, X, Trash2, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import Checkout from './Checkout'
 import { useCart } from '../../contexts/CartContext'
+import ImageGalleryModal from '../../components/ImageGalleryModal'
 
 interface Product {
   id: string
@@ -13,6 +14,7 @@ interface Product {
   stock_status: string
   stock_quantity: number
   is_available: boolean
+  images: { image_url: string }[]
 }
 
 export default function Products() {
@@ -22,30 +24,39 @@ export default function Products() {
   const [error, setError] = useState<string | null>(null)
   const [checkoutMode, setCheckoutMode] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
 
   useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setLoading(true)
+        const { data, error } = await supabase
+          .from('products')
+          .select(`
+            *,
+            images:product_images(*)
+          `)
+          .eq('is_available', true)
+          .order('title')
+
+        if (error) throw error
+
+        const productsWithImages = data?.map(product => ({
+          ...product,
+          images: product.images || []
+        })) || []
+
+        setProducts(productsWithImages)
+      } catch (error) {
+        console.error('Error fetching products:', error)
+        setError('Failed to fetch products')
+      } finally {
+        setLoading(false)
+      }
+    }
+
     fetchProducts()
   }, [])
-
-  async function fetchProducts() {
-    try {
-      setLoading(true)
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('is_available', true)
-        .order('title')
-
-      if (error) throw error
-
-      setProducts(data || [])
-    } catch (error) {
-      console.error('Error fetching products:', error)
-      setError('Failed to load products')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const cartTotal = Object.entries(cart).reduce((total, [productId, quantity]) => {
     const product = products.find(p => p.id === productId)
@@ -97,7 +108,12 @@ export default function Products() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Image
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Product
+              </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -107,6 +123,16 @@ export default function Products() {
           <tbody className="bg-white divide-y divide-gray-200">
             {filteredProducts.map(product => (
               <tr key={product.id}>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  {product.images && product.images.length > 0 && (
+                    <img 
+                      src={product.images[0].image_url} 
+                      alt="" 
+                      className="w-16 h-16 object-cover rounded cursor-pointer hover:opacity-75"
+                      onClick={() => setSelectedProduct(product)}
+                    />
+                  )}
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">{product.title}</div>
                   <div className="text-sm text-gray-500">{product.description}</div>
@@ -264,6 +290,14 @@ export default function Products() {
           </div>
         </div>
       </div>
+
+      {/* Image Gallery Modal */}
+      {selectedProduct && selectedProduct.images && selectedProduct.images.length > 0 && (
+        <ImageGalleryModal
+          images={selectedProduct.images}
+          onClose={() => setSelectedProduct(null)}
+        />
+      )}
     </div>
   )
 }

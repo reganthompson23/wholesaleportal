@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import ProductFormModal from './ProductFormModal'
+import ImageGalleryModal from '../../../components/ImageGalleryModal'
 
 interface Product {
   id: string
@@ -20,6 +21,7 @@ export default function ProductsList() {
   const [error, setError] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | undefined>()
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
 
   // Fetch products on component mount
   useEffect(() => {
@@ -199,6 +201,9 @@ export default function ProductsList() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Image
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Product
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -221,6 +226,16 @@ export default function ProductsList() {
           <tbody className="bg-white divide-y divide-gray-200">
             {products.map((product) => (
               <tr key={product.id}>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  {product.images && product.images.length > 0 && (
+                    <img 
+                      src={product.images[0].image_url} 
+                      alt="" 
+                      className="w-16 h-16 object-cover rounded cursor-pointer hover:opacity-75"
+                      onClick={() => setSelectedProduct(product)}
+                    />
+                  )}
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">{product.title}</div>
                   <div className="text-sm text-gray-500">{product.description}</div>
@@ -270,6 +285,14 @@ export default function ProductsList() {
           product={editingProduct}
           onClose={handleCloseModal}
           onSave={handleSaveProduct}
+        />
+      )}
+
+      {/* Image Gallery Modal */}
+      {selectedProduct && selectedProduct.images && selectedProduct.images.length > 0 && (
+        <ImageGalleryModal
+          images={selectedProduct.images}
+          onClose={() => setSelectedProduct(null)}
         />
       )}
     </div>
