@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { Search, ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import ProductSelectorModal from './ProductSelectorModal'
+import { supabase } from '../../../lib/supabase'
 
 interface Order {
   id: string
+  display_id: number
   created_at: string
   total: number
   status: 'new' | 'invoiced' | 'dispatched'
@@ -42,43 +44,86 @@ export default function OrdersList() {
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<Order['payment_status'] | 'all'>('all')
 
   useEffect(() => {
-    // Later we'll fetch from Supabase
-    setOrders([
-      {
-        id: '1',
-        created_at: new Date().toISOString(),
-        total: 89.97,
-        status: 'new',
-        payment_status: 'unpaid',
-        customer: {
-          business_name: 'RiverCity Scooters',
-          contact_name: 'John Doe',
-          email: 'john@rivercityscooters.com',
-          phone: '555-0123',
-          address: '123 River St, City, State, 12345'
-        },
-        internal_notes: '',
-        items: [
-          {
-            id: '1',
-            product_id: '1',
-            product_title: 'Product 1',
-            quantity: 2,
-            unit_price: 29.99
-          },
-          {
-            id: '2',
-            product_id: '2',
-            product_title: 'Product 2',
-            quantity: 1,
-            unit_price: 39.99
-          }
-        ],
-        shipping_cost: 5.00
-      }
-    ])
-    setLoading(false)
+    fetchOrders()
   }, [])
+
+  const fetchOrders = async () => {
+    try {
+      // Force token refresh
+      await supabase.auth.refreshSession()
+      
+      const { data: { user } } = await supabase.auth.getUser()
+      console.log('Current user and role:', user)
+
+      // Add this to check the raw JWT token
+      const { data: { session } } = await supabase.auth.getSession()
+      console.log('JWT token:', session?.access_token)
+
+      console.log('Fetching orders...')
+      const { data: ordersData, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          customer:customers (
+            business_name,
+            contact_name,
+            email,
+            phone,
+            address
+          ),
+          order_items (
+            id,
+            product_id,
+            quantity,
+            unit_price,
+            product:products (
+              title
+            )
+          )
+        `)
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false })
+
+      console.log('Raw orders data:', ordersData)
+
+      if (error) throw error
+
+      const transformedOrders = ordersData.map(order => ({
+        id: order.id,
+        display_id: order.display_id,
+        created_at: order.created_at,
+        total: order.total,
+        status: order.status || 'new',  // Add default value
+        payment_status: order.payment_status || 'unpaid',  // Add default value
+        shipping_cost: order.shipping_cost || 0,
+        internal_notes: order.internal_notes || '',
+        customer: {
+          business_name: order.customer?.business_name || 'Unknown',
+          contact_name: order.customer?.contact_name || '',
+          email: order.customer?.email || '',
+          phone: order.customer?.phone || '',
+          address: order.customer?.address || ''
+        },
+        items: order.order_items?.map(item => ({
+          id: item.id,
+          product_id: item.product_id,
+          product_title: item.product?.title || 'Unknown Product',
+          quantity: item.quantity || 0,
+          unit_price: item.unit_price || 0
+        })) || []
+      }))
+
+      console.log('Transformed orders:', transformedOrders)
+      setOrders(transformedOrders)
+
+      // Add this to check if orders are set
+      console.log('Orders state after setting:', orders)
+    } catch (error) {
+      console.error('Error fetching orders:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // Filter orders based on search and status filters
   const filteredOrders = orders.filter(order => {
@@ -92,53 +137,89 @@ export default function OrdersList() {
     return matchesSearch && matchesOrderStatus && matchesPaymentStatus
   })
 
-  const updateOrderStatus = (orderId: string, newStatus: Order['status']) => {
-    setOrders(currentOrders =>
-      currentOrders.map(order =>
-        order.id === orderId
-          ? { ...order, status: newStatus }
-          : order
+  const updateOrderStatus = async (orderId: string, newStatus: Order['status']) => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: newStatus })
+        .eq('id', orderId)
+
+      if (error) throw error
+
+      setOrders(currentOrders =>
+        currentOrders.map(order =>
+          order.id === orderId
+            ? { ...order, status: newStatus }
+            : order
+        )
       )
-    )
-    // Later we'll update in Supabase
-    console.log('Update order status:', orderId, newStatus)
+    } catch (error) {
+      console.error('Error updating order status:', error)
+    }
   }
 
-  const updatePaymentStatus = (orderId: string, newStatus: Order['payment_status']) => {
-    setOrders(currentOrders =>
-      currentOrders.map(order =>
-        order.id === orderId
-          ? { ...order, payment_status: newStatus }
-          : order
+  const updatePaymentStatus = async (orderId: string, newStatus: Order['payment_status']) => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ payment_status: newStatus })
+        .eq('id', orderId)
+
+      if (error) throw error
+
+      setOrders(currentOrders =>
+        currentOrders.map(order =>
+          order.id === orderId
+            ? { ...order, payment_status: newStatus }
+            : order
+        )
       )
-    )
-    // Later we'll update in Supabase
-    console.log('Update payment status:', orderId, newStatus)
+    } catch (error) {
+      console.error('Error updating payment status:', error)
+    }
   }
 
-  const updateInternalNotes = (orderId: string, notes: string) => {
-    setOrders(currentOrders =>
-      currentOrders.map(order =>
-        order.id === orderId
-          ? { ...order, internal_notes: notes }
-          : order
+  const updateInternalNotes = async (orderId: string, notes: string) => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ internal_notes: notes })
+        .eq('id', orderId)
+
+      if (error) throw error
+
+      setOrders(currentOrders =>
+        currentOrders.map(order =>
+          order.id === orderId
+            ? { ...order, internal_notes: notes }
+            : order
+        )
       )
-    )
-    setEditingNotes(null)
-    // Later we'll update in Supabase
-    console.log('Update internal notes:', orderId, notes)
+      setEditingNotes(null)
+    } catch (error) {
+      console.error('Error updating internal notes:', error)
+    }
   }
 
-  const updateShippingCost = (orderId: string, cost: number) => {
-    setOrders(currentOrders =>
-      currentOrders.map(order =>
-        order.id === orderId
-          ? { ...order, shipping_cost: cost }
-          : order
+  const updateShippingCost = async (orderId: string, cost: number) => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ shipping_cost: cost })
+        .eq('id', orderId)
+
+      if (error) throw error
+
+      setOrders(currentOrders =>
+        currentOrders.map(order =>
+          order.id === orderId
+            ? { ...order, shipping_cost: cost }
+            : order
+        )
       )
-    )
-    // Later we'll update in Supabase
-    console.log('Update shipping cost:', orderId, cost)
+    } catch (error) {
+      console.error('Error updating shipping cost:', error)
+    }
   }
 
   const calculateOrderTotal = (order: Order) => {
@@ -211,9 +292,54 @@ export default function OrdersList() {
     )
   }
 
+  const deleteOrder = async (orderId: string) => {
+    if (!confirm('Are you sure you want to hide this order? It will be removed from view but stored in the database.')) {
+      return
+    }
+
+    try {
+      console.log('Before update:', await supabase
+        .from('orders')
+        .select('id, is_deleted')
+        .eq('id', orderId)
+        .single()
+      )
+      
+      // More explicit update query
+      const { data, error } = await supabase.rpc('mark_order_as_deleted', {
+        order_id: orderId
+      })
+
+      console.log('Update response:', { data, error })
+
+      if (error) {
+        console.error('Supabase update error:', error)
+        throw error
+      }
+
+      // Check the result
+      console.log('After update:', await supabase
+        .from('orders')
+        .select('id, is_deleted')
+        .eq('id', orderId)
+        .single()
+      )
+
+      setOrders(currentOrders => 
+        currentOrders.filter(order => order.id !== orderId)
+      )
+
+    } catch (error) {
+      console.error('Error in delete process:', error)
+      alert('Failed to delete order. Please try again.')
+    }
+  }
+
   if (loading) {
     return <div>Loading orders...</div>
   }
+
+  console.log('Filtered orders:', filteredOrders)
 
   return (
     <div className="space-y-6">
@@ -272,7 +398,7 @@ export default function OrdersList() {
               <div className="flex justify-between items-center">
                 <div className="flex items-center space-x-4">
                   <h3 className="text-lg font-medium">
-                    <span className="text-gray-500">#{order.id}</span> • {order.customer.business_name}
+                    <span className="text-gray-500">#{order.display_id?.toString().padStart(5, '0') || order.id.slice(0, 8)}</span> • {order.customer.business_name}
                   </h3>
                 </div>
                 <div className="flex items-center space-x-4">
@@ -308,6 +434,14 @@ export default function OrdersList() {
                       : 'bg-red-100 text-red-800'}`}>
                     {order.payment_status.charAt(0).toUpperCase() + order.payment_status.slice(1)}
                   </span>
+
+                  <button
+                    onClick={() => deleteOrder(order.id)}
+                    className="p-2 text-red-600 hover:text-red-800"
+                    title="Delete Order"
+                  >
+                    <Trash2 size={20} />
+                  </button>
                 </div>
               </div>
 

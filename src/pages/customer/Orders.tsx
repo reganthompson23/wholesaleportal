@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { format } from 'date-fns'
 import { supabase } from '../../lib/supabase'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 
 interface Order {
   id: string
@@ -22,6 +23,7 @@ export default function Orders() {
   const { user } = useAuth()
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
+  const [expandedOrders, setExpandedOrders] = useState<string[]>([])
 
   useEffect(() => {
     fetchOrders()
@@ -43,6 +45,7 @@ export default function Orders() {
           )
         `)
         .eq('customer_id', user.id)
+        .eq('is_deleted', false)
         .order('created_at', { ascending: false })
 
       if (error) throw error
@@ -70,6 +73,14 @@ export default function Orders() {
     }
   }
 
+  const toggleOrder = (orderId: string) => {
+    setExpandedOrders(prev => 
+      prev.includes(orderId) 
+        ? prev.filter(id => id !== orderId)
+        : [...prev, orderId]
+    )
+  }
+
   if (loading) {
     return <div>Loading orders...</div>
   }
@@ -86,7 +97,10 @@ export default function Orders() {
         <div className="space-y-4">
           {orders.map((order) => (
             <div key={order.id} className="bg-white rounded-lg shadow overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+              <div 
+                className="px-6 py-4 border-b border-gray-200 bg-gray-50 cursor-pointer"
+                onClick={() => toggleOrder(order.id)}
+              >
                 <div className="flex justify-between items-center">
                   <div>
                     <h3 className="text-lg font-medium">Order #{order.display_id.toString().padStart(5, '0')}</h3>
@@ -94,7 +108,7 @@ export default function Orders() {
                       Placed on {format(new Date(order.created_at), 'PPP')}
                     </p>
                   </div>
-                  <div>
+                  <div className="flex items-center gap-4">
                     <span className={`px-3 py-1 rounded-full text-sm font-medium
                       ${order.status === 'delivered' ? 'bg-green-100 text-green-800' :
                         order.status === 'shipped' ? 'bg-blue-100 text-blue-800' :
@@ -102,50 +116,45 @@ export default function Orders() {
                         'bg-gray-100 text-gray-800'}`}>
                       {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                     </span>
+                    {expandedOrders.includes(order.id) ? 
+                      <ChevronUp className="h-5 w-5 text-gray-500" /> : 
+                      <ChevronDown className="h-5 w-5 text-gray-500" />
+                    }
                   </div>
                 </div>
               </div>
 
-              <div className="px-6 py-4">
-                <div className="space-y-4">
-                  {order.items.map((item) => (
-                    <div key={item.product_id} className="flex justify-between items-center">
-                      <div>
-                        <h4 className="font-medium">{item.product_title}</h4>
-                        <p className="text-sm text-gray-500">
-                          Quantity: {item.quantity} × ${item.unit_price.toFixed(2)}
-                        </p>
+              {expandedOrders.includes(order.id) && (
+                <div className="px-6 py-4">
+                  <div className="space-y-4">
+                    {order.items.map((item) => (
+                      <div key={item.product_id} className="flex justify-between items-center">
+                        <div>
+                          <h4 className="font-medium">{item.product_title}</h4>
+                          <p className="text-sm text-gray-500">
+                            Quantity: {item.quantity} × ${item.unit_price.toFixed(2)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium">${(item.quantity * item.unit_price).toFixed(2)}</p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-medium">${(item.quantity * item.unit_price).toFixed(2)}</p>
-                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-6 pt-4 border-t border-gray-200">
+                    <div className="flex justify-between items-center font-medium">
+                      <p>Total</p>
+                      <p>${order.total.toFixed(2)}</p>
                     </div>
-                  ))}
-                </div>
+                  </div>
 
-                <div className="mt-6 pt-4 border-t border-gray-200">
-                  <div className="flex justify-between items-center font-medium">
-                    <p>Total</p>
-                    <p>${order.total.toFixed(2)}</p>
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <h4 className="font-medium mb-2">Shipping Address</h4>
+                    <p className="text-sm text-gray-600">{order.shipping_address}</p>
                   </div>
                 </div>
-
-                <div className="mt-4 pt-4 border-t border-gray-200">
-                  <h4 className="font-medium mb-2">Shipping Address</h4>
-                  <p className="text-sm text-gray-600">{order.shipping_address}</p>
-                </div>
-              </div>
-
-              <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
-                <button
-                  onClick={() => {
-                    console.log('Reorder items from order:', order.id)
-                  }}
-                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                >
-                  Reorder Items
-                </button>
-              </div>
+              )}
             </div>
           ))}
         </div>
